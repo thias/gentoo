@@ -1,0 +1,51 @@
+#!/sbin/runscript
+# Copyright 1999-2013 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+extra_commands="checkconfig"
+extra_started_commands="reload"
+
+depend() {
+	need net
+	use logger
+	provide dns
+}
+
+checkconfig() {
+	if [ ! -e /etc/gdnsd/config ] ; then
+		eerror "You need to create /etc/gdnsd/config first."
+		eerror "Refer to the gdnsd.config(5) man page."
+		return 1
+	fi
+	gdnsd checkconf &>/dev/null
+
+	# the start and reload functions have their own eends so
+	# avoid calling this twice when there are no problems
+	[ $? -eq 0 ] || eend $? "Configuration error. Please fix your configfile (/etc/gdnsd/config)"
+}
+
+start() {
+	checkconfig || return 1
+	ebegin "Starting gdnsd"
+	/usr/sbin/gdnsd start &>/dev/null
+	eend $? "Failed to start gdnsd"
+}
+
+stop() {
+	ebegin "Stopping gdnsd"
+	/usr/sbin/gdnsd stop &>/dev/null
+	eend $? "Failed to stop gdnsd"
+	#sleep 1 # needed for gdnsd to stop in case we're restarting
+}
+
+reload() {
+	if ! /usr/sbin/gdnsd status &>/dev/null; then
+		eerror "gdnsd isn't running"
+		return 1
+	fi
+	checkconfig || return 1
+	ebegin "Reloading configuration and re-opening log files"
+	/usr/sbin/gdnsd reload &>/dev/null
+	eend $?
+}
